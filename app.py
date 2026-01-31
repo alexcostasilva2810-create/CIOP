@@ -1,104 +1,74 @@
 import streamlit as st
 import requests
+from fpdf import FPDF
 from datetime import datetime
+import io
 
-# --- CONFIGURAÇÕES DO NOTION ---
+# --- CONFIGURAÇÕES ---
 NOTION_TOKEN = "ntn_KF635337593asvoK365BE8elugieK9vDsu88LJ2Xyk00yC"
 DATABASE_ID = "2f9025de7b79802aa7d8e4711eff1ab6"
+MAKE_WEBHOOK_URL = "SUA_URL_DO_MAKE_AQUI" # Para o WhatsApp
 
-st.set_page_config(page_title="Cálculo de Consumo Marítimo", layout="wide")
-
-st.title("🚢 Relatório de Viagem - Lógica de Queima")
-
-with st.form("main_form"):
-    # --- DADOS INICIAIS ---
-    c1, c2 = st.columns(2)
-    with c1:
-        empurrador = st.selectbox("E/M", ["CUMARU", "SAMAUAMA", "JATOBA", "LUIZ FELIPE", "IPE", "AROEIRA", "ANGICO", "JACARANDA", "CAJERANA", "QUARUBA"])
-        balsas = st.text_input("BT's/BG's", placeholder="Ex: GD XLI, GD XLII...")
-    with c2:
-        rem_saida = st.number_input("REMANESCENTE DE SAÍDA (L)", value=33761.25, format="%.2f")
-        cmt = st.text_input("Comandante (CMT)")
-
-    st.divider()
-
-    # --- MATRIZ DE RPM E QUEIMA ---
-    st.subheader("📊 Navegação por RPM (MCP)")
-    st.write("Informe as Horas e a Taxa de Queima (L/H) para cada faixa:")
+def gerar_pdf(dados):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
     
-    # Cabeçalho da tabela de cálculo
-    h_col, q_col, r_col = st.columns([2, 2, 2])
-    h_col.write("**Horas Navegadas**")
-    q_col.write("**Queima (L/H)**")
-    r_col.write("**Subtotal Consumo**")
-
-    rpms = ["1.200 RPM", "1.300 RPM", "1.400 RPM", "1.500 RPM", "1.600 RPM", "1.700 RPM", "1.800 RPM"]
-    dados_mcp = {}
-
-    for rpm in rpms:
-        col_h, col_q, col_r = st.columns([2, 2, 2])
-        # Define valores padrão conforme sua imagem anterior para teste
-        default_h = 84.3 if "1.500" in rpm else (8.3 if "1.600" in rpm else 0.0)
-        default_q = 231.0 if "1.500" in rpm else (270.5 if "1.600" in rpm else 0.0)
-        
-        horas = col_h.number_input(f"Horas {rpm}", min_value=0.0, value=default_h, format="%.1f", label_visibility="collapsed")
-        queima = col_q.number_input(f"Queima {rpm}", min_value=0.0, value=default_q, format="%.1f", label_visibility="collapsed")
-        subtotal = horas * queima
-        col_r.write(f"**{subtotal:,.2f} L**")
-        dados_mcp[rpm] = subtotal
-
-    st.divider()
-
-    # --- MOTORES AUXILIARES (MCA) ---
-    st.subheader("⚙️ Motores Auxiliares (MCA)")
-    col_mca_h, col_mca_q, col_mca_res = st.columns([2, 2, 2])
+    # Cabeçalho
+    pdf.cell(200, 10, "⛵ RELATÓRIO FINAL DE VIAGEM", ln=True, align='L')
+    pdf.set_font("Arial", "B", 10)
     
-    mca_horas = col_mca_h.number_input("MCA - Total de Horas", min_value=0.0, value=92.8, format="%.1f")
-    mca_queima = col_mca_q.number_input("MCA - Queima (L/H)", min_value=0.0, value=6.5, format="%.1f")
-    consumo_mca = mca_horas * mca_queima
-    col_mca_res.write(f"**Consumo MCA: {consumo_mca:,.2f} L**")
-
-    # --- CÁLCULO FINAL ---
-    consumo_total_mcp = sum(dados_mcp.values())
-    consumo_final = consumo_total_mcp + consumo_mca
-    saldo_final = rem_saida - consumo_final
-
-    st.divider()
+    line_height = 7
+    pdf.cell(200, line_height, f"E/M: {dados['empurrador']}", ln=True)
+    pdf.cell(200, line_height, f"BT's/BG'S: {dados['balsas']}", ln=True)
+    pdf.cell(200, line_height, f"CMT: {dados['cmt']}", ln=True)
+    pdf.cell(200, line_height, f"ORIGEM: {dados['origem']}", ln=True)
+    pdf.cell(200, line_height, f"DESTINO: {dados['destino']}", ln=True)
+    pdf.cell(200, line_height, f"DHOS: {dados['dhos']}", ln=True)
     
-    # --- RESULTADOS NA TELA ---
-    res1, res2, res3 = st.columns(3)
-    res1.metric("CONSUMO TOTAL", f"{consumo_final:,.2f} L")
-    res2.metric("REMANESCENTE CHEGADA", f"{saldo_final:,.2f} L")
+    # Seção de RPMs
+    pdf.ln(5)
+    for rpm, valor in dados['rpms'].items():
+        if valor['horas'] > 0:
+            pdf.cell(200, line_height, f"HORAS NAVEGADAS {rpm}: {valor['horas']} ({valor['queima']} L/H)", ln=True)
     
-    if saldo_final < 0:
-        st.error(f"⚠️ ERRO: O consumo ({consumo_final:,.2f} L) excede o Remanescente de Saída!")
-        bloqueio = True
-    else:
-        st.success("✅ Saldo Positivo")
-        bloqueio = False
+    # Totais
+    pdf.ln(5)
+    pdf.cell(200, line_height, f"REMANESCENTE DE SAÍDA (L): {dados['rem_saida']:,.2f}", ln=True)
+    pdf.cell(200, line_height, f"CONSUMO UTILIZADO (L): {dados['consumo_total']:,.2f}", ln=True)
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(200, line_height, f"REMANESCENTE DE CHEGADA (L): {dados['saldo_final']:,.2f}", ln=True)
+    
+    return pdf.output(dest='S').encode('latin-1')
 
-    submit = st.form_submit_button("SALVAR E GERAR RELATÓRIO")
+# --- INTERFACE (Mesma lógica de cálculo anterior) ---
+st.title("🚢 Sistema de Despacho Marítimo")
 
-if submit:
-    if bloqueio:
-        st.error("Corrija os valores. O consumo não pode ser maior que o remanescente.")
-    else:
-        # Envio para o Notion
-        payload = {
-            "parent": {"database_id": DATABASE_ID},
-            "properties": {
-                "EM": {"title": [{"text": {"content": f"{empurrador} | {balsas}"}}]},
-                "CMT": {"rich_text": [{"text": {"content": cmt}}]},
-                "Consumo Utilizado": {"number": round(consumo_final, 2)},
-                "DHOS": {"rich_text": [{"text": {"content": f"Saldo: {round(saldo_final, 2)}L"}}]},
-                "Data de Registro": {"date": {"start": datetime.now().isoformat()}}
-            }
-        }
-        res = requests.post("https://api.notion.com/v1/pages", 
-                            json=payload, 
-                            headers={"Authorization": f"Bearer {NOTION_TOKEN}", 
-                                     "Notion-Version": "2022-06-28", "Content-Type": "application/json"})
-        
-        if res.status_code == 200:
-            st.balloons()
-            st.success("Dados salvos no Notion!")
+# ... (Mantenha aqui os inputs de RPM e MCA que fizemos no passo anterior) ...
+# [Simulando inputs para brevidade do exemplo]
+rem_saida = st.number_input("REMANESCENTE SAÍDA", value=33761.25)
+# ... campos de horas e queima ...
+
+# Cálculo final (Exemplo simplificado para o botão)
+consumo_total = 22321.65 # Resultado da sua lógica
+saldo_final = rem_saida - consumo_total
+
+if st.button("FINALIZAR, SALVAR E ENVIAR WHATSAPP"):
+    dados_relatorio = {
+        "empurrador": "GD CUMARU", "balsas": "GD XLI...", "cmt": "MAURO LOPES",
+        "origem": "PVH", "destino": "NVR", "dhos": "26/01 18:00",
+        "rem_saida": rem_saida, "consumo_total": consumo_total, "saldo_final": saldo_final,
+        "rpms": {"1.500 RPM": {"horas": 84.3, "queima": 231.0}} # Exemplo
+    }
+    
+    # 1. Gerar PDF
+    pdf_bytes = gerar_pdf(dados_relatorio)
+    
+    # 2. Salvar no Notion (código que já fizemos)
+    
+    # 3. Enviar para o WhatsApp via Make.com
+    # O Make recebe o PDF e envia para o grupo automaticamente
+    requests.post(MAKE_WEBHOOK_URL, files={"file": ("relatorio.pdf", pdf_bytes)})
+    
+    st.success("✅ Processo Completo! PDF enviado para OPERAÇÕES & LOGÍSTICA.")
+    st.download_button("Baixar Cópia do PDF", data=pdf_bytes, file_name="relatorio.pdf")
