@@ -1,60 +1,57 @@
 import streamlit as st
+import requests
 from datetime import datetime
 
-st.set_page_config(page_title="Relatório de Viagem", layout="wide")
+# --- CONFIGURAÇÕES DO NOTION ---
+NOTION_TOKEN = "ntn_KF635337593asvoK365BE8elugieK9vDsu88LJ2Xyk00yC"
+DATABASE_ID = "2f9025de7b79802aa7d8e4711eff1ab6"
 
-st.title("🚢 Relatório Final de Viagem")
+def enviar_ao_notion(dados):
+    url = "https://api.notion.com/v1/pages"
+    headers = {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Content-Type": "application/json",
+        "Notion-Version": "2022-06-28"
+    }
+    payload = {
+        "parent": {"database_id": DATABASE_ID},
+        "properties": {
+            "EM": {"title": [{"text": {"content": dados['em']}}]},
+            "CMT": {"rich_text": [{"text": {"content": dados['cmt']}}]},
+            "Origem": {"rich_text": [{"text": {"content": dados['origem']}}]},
+            "Destino": {"rich_text": [{"text": {"content": dados['destino']}}]},
+            "DHOS": {"rich_text": [{"text": {"content": dados['dhos']}}]},
+            "Consumo Utilizado": {"number": dados['consumo']},
+            "Data de Registro": {"date": {"start": datetime.now().isoformat()}}
+        }
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    return response
 
-# Organizando os campos em colunas para não ficar uma lista infinita
+# --- INTERFACE STREAMLIT ---
+st.title("🚢 Registro de Viagem")
+
 with st.form("form_viagem"):
+    em = st.text_input("E/M", value="GD CUMARU")
+    cmt = st.text_input("Comandante (CMT)")
     col1, col2 = st.columns(2)
-    
     with col1:
-        vessel = st.text_input("E/M", value="GD CUMARU")
-        bts_bgs = st.text_area("BT's/BG'S", value="GD XLI, GD XLII, GD XVII, GD XVIII, GD XXXIV, GD XXXVII, GD IX, GD XL, GD XLIII - CGDAS")
-        cmt = st.text_input("CMT (Comandante)")
-        chm = st.text_input("CHM (Chefe de Máquinas)")
-        
+        origem = st.text_input("Origem", value="PVH")
+        dhos = st.text_input("DHOS", value="26/01 18:00")
     with col2:
-        origem = st.text_input("ORIGEM", value="PVH")
-        destino = st.text_input("DESTINO", value="NVR")
-        dhos = st.text_input("DHOS (Data/Hora Saída)", value="26/01 18:00 (H BEL)")
-        dhoc = st.text_input("DHOC (Data/Hora Chegada)", value="30/01 13:30 (H BEL)")
-
-    st.divider()
-    st.subheader("⚙️ Horímetros e Consumo")
+        destino = st.text_input("Destino", value="NVR")
+        consumo = st.number_input("Consumo Utilizado (L)", min_value=0.0, format="%.2f")
     
-    c3, c4, c5 = st.columns(3)
-    with c3:
-        h_saida_bb = st.number_input("Horímetro Saída MCP BB", format="%.1f")
-        h_atual_bb = st.number_input("Horímetro Atual MCP BB", format="%.1f")
-    with c4:
-        h_saida_be = st.number_input("Horímetro Saída MCP BE", format="%.1f")
-        h_atual_be = st.number_input("Horímetro Atual MCP BE", format="%.1f")
-    with c5:
-        mca1_saida = st.number_input("Horímetro Saída MCA 1", format="%.1f")
-        mca1_atual = st.number_input("Horímetro Atual MCA 1", format="%.1f")
+    submit = st.form_submit_button("Salvar na Tabela")
 
-    st.divider()
-    st.subheader("📊 Navegação e Queima")
+if submit:
+    dados = {
+        "em": em, "cmt": cmt, "origem": origem, 
+        "destino": destino, "dhos": dhos, "consumo": consumo
+    }
+    res = enviar_ao_notion(dados)
     
-    col_nav1, col_nav2 = st.columns(2)
-    with col_nav1:
-        horas_nav = st.number_input("HORAS NAVEGADAS TOTAL", format="%.1f")
-        h_1500_rpm = st.number_input("HORAS EM 1.500 RPM", format="%.1f")
-        h_1600_rpm = st.number_input("HORAS EM 1.600 RPM", format="%.1f")
-        
-    with col_nav2:
-        rem_saida = st.number_input("REMANESCENTE SAÍDA (L)", format="%.2f")
-        consumo = st.number_input("CONSUMO UTILIZADO (L)", format="%.2f")
-        rem_chegada = rem_saida - consumo
-        st.info(f"Remanescente Chegada: {rem_chegada:.2f} L")
-
-    obs = st.text_area("OBSERVAÇÕES", placeholder="Ex: QUEIMA 1500 231 L/H...")
-
-    # Botão de submissão
-    btn_salvar = st.form_submit_button("GERAR RELATÓRIO E SALVAR NO NOTION")
-
-if btn_salvar:
-    # Aqui entrarão as funções de PDF e Notion nos próximos passos
-    st.success("Dados capturados! Preparando envio...")
+    if res.status_code == 200:
+        st.success("✅ Salvo no Notion com sucesso!")
+    else:
+        st.error(f"❌ Erro ao salvar: {res.text}")
