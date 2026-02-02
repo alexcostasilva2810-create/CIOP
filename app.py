@@ -27,7 +27,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚢 Relatório de Viagem Completo")
+st.title("Relatório de Viagem Completo")
 
 # --- CABEÇALHO (O que você já tinha) ---
 c1, c2, c3, c4 = st.columns(4)
@@ -39,7 +39,7 @@ with c4: balsas = st.text_input("BALSAS")
 st.divider()
 
 # --- NOVOS CAMPOS (ACIMA DO RPM) ---
-st.subheader("📋 Informações da Viagem")
+st.subheader("Informações da Viagem")
 
 # Linha 1: CHM, Origem, Destino, RPM Autorizado
 nc1, nc2, nc3, nc4 = st.columns(4)
@@ -72,7 +72,7 @@ h_atual_mca2 = nc14.number_input("ATUAL MCA 2", format="%.1f")
 st.divider()
 
 # --- TABELA DE RPM (Sua lógica de cálculo automática) ---
-st.subheader("📊 Navegação por RPM (MCP)")
+st.subheader("Navegação por RPM (MCP)")
 rpms = ["1.200 RPM", "1.300 RPM", "1.400 RPM", "1.500 RPM", "1.600 RPM", "1.700 RPM", "1.800 RPM"]
 total_mcp = 0.0
 
