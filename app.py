@@ -18,7 +18,7 @@ st.set_page_config(page_title="Cálculo de Consumo Marítimo", layout="wide")
 
 
 
-st.title("🚢 Relatório de Viagem - Lógica de Queima")
+st.title("Relatório de Viagem - Lógica de Queima")
 
 
 
